@@ -1,0 +1,6 @@
+# Small placeholder file for testing configuration validation.
+# Dependency parsing is implemented in a later stage.
+A: B, C
+B: D
+C:
+D:
