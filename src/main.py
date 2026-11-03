@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+from src.alpine import direct_dependencies, read_apkindex
+
 
 PACKAGE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.-]*$")
 MAX_ALLOWED_DEPTH = 100
@@ -15,7 +17,7 @@ DEFAULT_DEPTH = 3
 def build_parser():
     """Create a command-line parser with all stage-one options."""
     parser = argparse.ArgumentParser(
-        description="Dependency graph visualizer: stage 1 prototype."
+        description="Alpine Linux dependency analyzer (variant 16)."
     )
     parser.add_argument(
         "--package", required=True,
@@ -106,8 +108,23 @@ def main(argv=None):
         print(f"Error: {error}", file=sys.stderr)
         return 2
 
-    print_configuration(args)
-    print("Stage 1: configuration loaded successfully.")
+    if args.test_mode:
+        print_configuration(args)
+        print("Test repository analysis is available in stage 3.")
+        return 0
+
+    try:
+        index = read_apkindex(args.repository)
+        dependencies = direct_dependencies(index, args.package)
+    except ValueError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
+    print(f"Direct dependencies of {args.package}:")
+    for dependency in dependencies:
+        print(f"- {dependency}")
+    if not dependencies:
+        print("(none)")
     return 0
 
 

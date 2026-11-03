@@ -1,56 +1,37 @@
-# Variant 16 — Stage 1
+# Variant 16 — Stage 2
 
 ## Overview
 
-A minimal command-line prototype for a dependency graph visualizer.
-This stage implements configuration through command-line options and
-validates every user-configurable parameter.
+A CLI for retrieving **direct** dependencies of Alpine Linux (`apk`)
+packages. Uses Python's standard library, not apk or dependency libraries.
+The program reads `APKINDEX.tar.gz` from an Alpine repository directory,
+extracts the `APKINDEX` text file, and parses its `P:` and `D:` records.
 
-The project uses Python standard-library modules only. Dependency
-retrieval and graph construction are not part of stage 1.
+## Options
 
-## Parameters
+- `--package NAME`: the package to analyze (required).
+- `--repository URL`: URL of a specific Alpine repository directory
+  containing `APKINDEX.tar.gz` (required), for example
+  `https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/`.
+- `--test-mode`: reserved for local test repositories in stage 3.
+- `--max-depth N`: depth 0–100, default 3 (used in stage 3).
 
-| Option | Required | Description |
-|---|---:|---|
-| `--package` | Yes | Package name to analyze |
-| `--repository` | Yes | Repository URL or test repository file path |
-| `--test-mode` | No | Enables local test repository mode |
-| `--max-depth` | No | Maximum dependency depth, from 0 to 100; default is 3 |
-
-In real mode, `--repository` must be an HTTP or HTTPS URL.
-In test mode, it must point to an existing file.
-
-## Requirements
-
-- Python 3.10 or newer
-- No third-party libraries
+Alpine dependency constraints such as `lib>=1` are normalized to `lib`.
+Special `so:`, `cmd:` and `pc:` dependencies are excluded because they
+are virtual capabilities, not direct package names. This stage reads the
+specific repository index supplied by the user; it does not combine indexes
+from separate repositories or resolve provider aliases.
 
 ## Run
 
-Linux/macOS:
+Python 3.10+ is required. On Linux/macOS:
 
 ```bash
-./run.sh --package curl --repository https://dl-cdn.alpinelinux.org/alpine/
+./run.sh --package busybox --repository \
+  https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/
 ```
 
-Windows:
-
-```bat
-run.bat --package curl --repository https://dl-cdn.alpinelinux.org/alpine/
-```
-
-Test mode:
-
-```bash
-./run.sh --package demo --repository ./tests/test-repository.txt --test-mode
-```
-
-Set maximum depth:
-
-```bash
-./run.sh --package curl --repository https://example.org/alpine/ --max-depth 5
-```
+On Windows use `run.bat` with the same options.
 
 ## Tests
 
@@ -60,20 +41,6 @@ python3 -m unittest discover -s tests -v
 
 ## Error handling
 
-The application reports errors for:
-- missing required command-line options;
-- invalid package names;
-- an empty repository parameter;
-- an invalid URL in real mode;
-- a missing test repository file;
-- a test repository path that is not a file;
-- a negative maximum depth;
-- a maximum depth greater than 100.
-
-Invalid values produce an error message and exit code `2`.
-A successful run prints all configuration parameters as key-value pairs.
-
-## Stage boundary
-
-This implementation covers only stage 1. It does not download package
-metadata, resolve dependencies, or build a dependency graph.
+Invalid CLI options, missing packages, network failures and malformed
+repository archives cause clear error messages and a nonzero exit code.
+No external Python dependencies are required.
