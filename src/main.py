@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-from src.alpine import direct_dependencies, read_apkindex
+from src.alpine import read_apkindex
+from src.graph import build_graph, format_graph, read_test_repository
 
 
 PACKAGE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.-]*$")
@@ -108,23 +109,18 @@ def main(argv=None):
         print(f"Error: {error}", file=sys.stderr)
         return 2
 
-    if args.test_mode:
-        print_configuration(args)
-        print("Test repository analysis is available in stage 3.")
-        return 0
-
     try:
-        index = read_apkindex(args.repository)
-        dependencies = direct_dependencies(index, args.package)
-    except ValueError as error:
+        if args.test_mode:
+            source = read_test_repository(args.repository)
+        else:
+            source = read_apkindex(args.repository)
+        graph = build_graph(source, args.package, args.max_depth)
+    except (ValueError, OSError, UnicodeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
 
-    print(f"Direct dependencies of {args.package}:")
-    for dependency in dependencies:
-        print(f"- {dependency}")
-    if not dependencies:
-        print("(none)")
+    print(f"Dependencies of {args.package} (max depth {args.max_depth}):")
+    print(format_graph(graph))
     return 0
 
 
