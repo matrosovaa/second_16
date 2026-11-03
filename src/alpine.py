@@ -47,7 +47,7 @@ def read_apkindex(repository):
         with urlopen(url, timeout=15) as response:
             archive = response.read()
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
-            member = tar.extractfile(INDEX_FILENAME)
+            member = tar.extractfile("APKINDEX")
             if member is None:
                 raise ValueError("APKINDEX.tar.gz has no APKINDEX file.")
             text = member.read().decode("utf-8")
