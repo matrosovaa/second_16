@@ -9,6 +9,7 @@ from urllib.request import urlopen
 
 INDEX_FILENAME = "APKINDEX.tar.gz"
 DEP_NAME = re.compile(r"^([A-Za-z0-9][A-Za-z0-9+_.-]*)")
+FIELD_LINE = re.compile(r"^(.):(.*)$")
 
 
 def index_url(repository):
@@ -24,8 +25,9 @@ def parse_index(content):
     for block in content.split("\n\n"):
         record = {}
         for line in block.splitlines():
-            if len(line) >= 2 and line[1] == ":":
-                record[line[0]] = line[2:]
+            field = FIELD_LINE.match(line)
+            if field:
+                record[field.group(1)] = field.group(2)
         name = record.get("P")
         if not name:
             continue
@@ -52,7 +54,9 @@ def read_apkindex(repository):
                 raise ValueError("APKINDEX.tar.gz has no APKINDEX file.")
             text = member.read().decode("utf-8")
     except (HTTPError, URLError, OSError, tarfile.TarError) as error:
-        raise ValueError(f"Could not read Alpine repository: {error}") from error
+        raise ValueError(
+            f"Could not read Alpine repository: {error}"
+        ) from error
     return parse_index(text)
 
 

@@ -5,7 +5,12 @@ import tarfile
 import unittest
 from unittest.mock import patch
 
-from src.alpine import direct_dependencies, index_url, parse_index, read_apkindex
+from src.alpine import (
+    direct_dependencies,
+    index_url,
+    parse_index,
+    read_apkindex,
+)
 
 
 SAMPLE_INDEX = (
