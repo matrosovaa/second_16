@@ -1,52 +1,116 @@
-# Вариант 16 — команды для защиты этапов 4 и 5
+# Вариант 16 — команды для защиты на Mac (этапы 4 и 5)
 
-## Команды для защиты: этапы 4 и 5
+Инструкция рассчитана на macOS и Terminal в IntelliJ IDEA. Все команды ниже
+вводятся из корневой папки проекта `second_16` — там, где лежат `run.sh`,
+`run_stage4.sh`, `run_stage5.sh` и папки `src`, `tests`.
 
-Код этапов 1–3 не изменялся. Команды вводятся в Terminal из корневой папки проекта `second_16`.
-Для демонстрации обоих этапов удобнее оставаться на ветке `5`:
-она содержит реализацию этапа 4 и этапа 5.
+**Этапы 1–3 не изменяются.** Для демонстрации этапов 4 и 5 используется
+ветка `5`: в ней есть реализация обоих этапов.
 
-Перейти на итоговую ветку:
+## 0. Подготовка на Mac — выполнить один раз
+
+Открой проект `second_16` в IntelliJ IDEA, затем вкладку **Terminal**.
+Проверь, что терминал находится в папке проекта:
+
+```bash
+pwd
+ls
+```
+
+Если в списке видны `src`, `tests` и `run.sh`, ты находишься в нужной папке.
+Сделай скрипты исполняемыми (это обычная настройка прав в macOS):
+
+```bash
+chmod +x run.sh run_stage4.sh run_stage5.sh scripts/demo_stage5.sh
+```
+
+Перейди на итоговую ветку с этапами 4 и 5:
 
 ```bash
 git switch 5
 ```
 
-### Этап 4. Порядок загрузки зависимостей
+Проверить текущую ветку:
 
-**1. Показать правильный порядок установки пакетов** на тестовом репозитории:
+```bash
+git branch --show-current
+```
+
+Должно вывести `5`.
+
+## Этап 4. Порядок загрузки зависимостей
+
+По варианту 16 программа должна показать порядок установки зависимостей,
+обработать циклические зависимости и сравнить результат с Alpine APK.
+
+### 4.1. Показать порядок установки на тестовом репозитории
 
 ```bash
 ./run_stage4.sh --package A --repository tests/diamond-repository.txt --test-mode --max-depth 10 --install-order
 ```
 
-Ожидаемый порядок: `D`, затем `B` и `C`, затем `A`.
-Пакет `D` устанавливается первым, потому что от него зависят `B` и `C`.
+Ожидаемый порядок:
 
-**2. Показать обработку циклических зависимостей:**
+```text
+Installation order for A:
+1. D
+2. B
+3. C
+4. A
+```
+
+Пояснение: `A` зависит от `B` и `C`, а они зависят от `D`. Поэтому `D`
+устанавливается первым, затем `B` и `C`, после них — `A`.
+
+### 4.2. Показать обработку цикла
 
 ```bash
 ./run_stage4.sh --package A --repository tests/cycle-repository.txt --test-mode --max-depth 10 --install-order
 ```
 
-Ожидается сообщение об ошибке `Dependency cycle blocks installation order`.
-При цикле корректный порядок установки построить нельзя.
+Ожидается сообщение об ошибке вида:
 
-**3. Сравнить результат с настоящим Alpine APK:**
+```text
+Error: Dependency cycle blocks installation order: A, B, C
+```
+
+Пояснение: при циклических зависимостях невозможно построить корректный
+порядок установки.
+
+### 4.3. Сравнить с настоящим Alpine APK
+
+На Mac для этого сравнения удобнее использовать **Docker Desktop**.
+Установи Docker Desktop для macOS и запусти его перед выполнением команд.
+Проверь, что Docker работает:
+
+```bash
+docker --version
+docker info
+```
+
+Затем выполни сравнение:
 
 ```bash
 ./run_stage4.sh --package curl --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/ --max-depth 100 --install-order --compare-apk
 ```
 
-Для сравнения нужен установленный `apk` или запущенный Docker.
-Используется режим `apk add --simulate`: пакеты не устанавливаются.
+Docker при необходимости сам загрузит образ Alpine. Используется режим
+`apk add --simulate`: пакеты на Mac не устанавливаются.
 
-### Этап 5. Визуализация графа в D2
+Если Docker Desktop не установлен или не запущен, этот пункт сравнения
+не выполнится. Тестовые команды из пунктов 4.1 и 4.2 от Docker не зависят.
 
-**1. Установить D2 (один раз):**
+## Этап 5. Визуализация графа зависимостей в D2
+
+По варианту 16 нужно сформировать описание графа на языке D2, вывести
+изображение и показать визуализацию для трёх разных пакетов.
+
+### 5.1. Установить D2 на Mac (один раз)
+
+Если Homebrew уже установлен:
 
 ```bash
-curl -fsSL https://d2lang.com/install.sh | sh -s --
+brew install d2
 ```
 
 Проверить установку:
@@ -55,36 +119,50 @@ curl -fsSL https://d2lang.com/install.sh | sh -s --
 d2 version
 ```
 
-**2. Построить граф для пакета A:**
+Если команда `brew` не найдена, сначала установи Homebrew официальной
+командой, затем открой новое окно Terminal и выполни `brew install d2`:
 
 ```bash
-./run_stage5.sh --package A --repository tests/test-repository.txt --test-mode --max-depth 10
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-**3. Построить граф для пакета B:**
+### 5.2. Построить граф пакета A и сохранить SVG
 
 ```bash
-./run_stage5.sh --package B --repository tests/test-repository.txt --test-mode --max-depth 10
+./run_stage5.sh --package A --repository tests/test-repository.txt --test-mode --max-depth 10 --output graph-A.svg --no-open
+open graph-A.svg
 ```
 
-**4. Построить граф для пакета C:**
+### 5.3. Построить граф пакета B и сохранить SVG
 
 ```bash
-./run_stage5.sh --package C --repository tests/test-repository.txt --test-mode --max-depth 10
+./run_stage5.sh --package B --repository tests/test-repository.txt --test-mode --max-depth 10 --output graph-B.svg --no-open
+open graph-B.svg
 ```
 
-Каждая команда выводит описание графа D2, создаёт SVG-изображение
-и открывает его. Файл по умолчанию сохраняется во временную папку.
+### 5.4. Построить граф пакета C и сохранить SVG
 
-**Вместо трёх отдельных команд можно запустить общую демонстрацию:**
+```bash
+./run_stage5.sh --package C --repository tests/test-repository.txt --test-mode --max-depth 10 --output graph-C.svg --no-open
+open graph-C.svg
+```
+
+Команда `open` — стандартная команда macOS: она открывает SVG в программе,
+назначенной для просмотра таких файлов. Описание D2 программа выводит
+в Terminal, а сами файлы `graph-A.svg`, `graph-B.svg`, `graph-C.svg`
+сохраняются в папке проекта.
+
+### 5.5. Вместо трёх отдельных запусков — общая демонстрация
+
+После установки D2 можно выполнить одну команду:
 
 ```bash
 ./scripts/demo_stage5.sh
 ```
 
-Скрипт последовательно строит графы для `A`, `B` и `C`.
+Она последовательно построит и откроет графы пакетов `A`, `B` и `C`.
 
-### Общая проверка проекта
+## Общая проверка перед защитой
 
 Запустить все автоматические тесты:
 
@@ -92,155 +170,52 @@ d2 version
 python3 -m unittest discover -s tests -v
 ```
 
-Ожидаемый результат: `Ran 34 tests` и `OK`.
-
-Показать ветки и историю коммитов:
+Показать ветки:
 
 ```bash
 git branch -v
+```
+
+Показать историю коммитов:
+
+```bash
 git log --oneline --decorate --all -10
 ```
 
-Отправить ветки 4 и 5 на GitHub:
+Отправить ветки 4 и 5 на GitHub (если репозиторий уже подключён к `origin`):
 
 ```bash
 git push -u origin 4
 git push -u origin 5
 ```
 
----
+## Коротко: что сказать преподавателю
 
-## Overview
+- **Этап 4:** программа строит порядок установки так, чтобы зависимости
+  устанавливались раньше пакетов, которым они нужны. При цикле программа
+  сообщает об ошибке. Для сравнения с реальным менеджером используется
+  Alpine APK в режиме симуляции установки.
+- **Этап 5:** программа формирует описание графа на языке D2 и преобразует
+  его в SVG. На защите показаны три пакета: `A`, `B` и `C`.
+- **Этапы 1–3:** исходную реализацию этих этапов не требуется менять
+  для демонстрации этапов 4 и 5.
 
-A command-line Alpine Linux (`apk`) dependency analyzer implemented with
-Python's standard library. It downloads package records directly from an
-Alpine `APKINDEX.tar.gz` or loads a local text test repository.
+## Общие сведения о проекте
 
-Stage 2 retrieved direct dependencies; **stage 3** traverses transitive
-dependencies with **recursive BFS**. Each recursive call processes the next
-breadth-first layer. A visited set handles cycles, and `--max-depth` limits
-how many edges are explored. Cyclic edges remain in the reported graph.
+Проект анализирует зависимости пакетов Alpine Linux (`apk`). Для получения
+информации о пакетах используется чтение `APKINDEX.tar.gz`; готовые
+менеджеры пакетов не используются для извлечения графа зависимостей.
+Локальные тестовые репозитории находятся в папке `tests/`.
 
-## CLI parameters
+Основные параметры командной строки:
 
-| Option | Description |
+| Параметр | Назначение |
 |---|---|
-| `--package NAME` | Package to analyze, required |
-| `--repository PATH_OR_URL` | Remote Alpine repository directory or local graph file |
-| `--test-mode` | Interpret repository as a local graph file |
-| `--max-depth N` | BFS limit in edges, integer 0–100; default 3 |
-
-The remote URL must point to a specific repository, e.g. a `main/x86_64/`
-folder containing `APKINDEX.tar.gz`, not simply the Alpine website root.
-Special virtual dependencies (`so:`, `cmd:`, `pc:`) are not resolved. Named
-package constraints are normalized to names for this graph demonstration.
-
-## Run (macOS / Linux)
-
-```bash
-./run.sh --package A --repository tests/test-repository.txt --test-mode
-./run.sh --package A --repository tests/cycle-repository.txt --test-mode
-./run.sh --package A --repository tests/diamond-repository.txt \
-  --test-mode --max-depth 1
-./run.sh --package busybox --repository \
-  https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/ \
-  --max-depth 2
-```
-
-For Windows, use `run.bat` instead of `./run.sh`.
-
-## Test repository format
-
-Packages use **uppercase Latin letters**. Each line is `NAME: DEP1, DEP2`;
-blank dependency lists are permitted. Blank lines and `#` comments are
-ignored. Examples are in `tests/`.
-
-## Tests
-
-```bash
-python3 -m unittest discover -s tests -v
-```
-
-## Limitations and errors
-
-Invalid options, missing files or packages, malformed graph files,
-unavailable repositories and damaged archive data produce error messages.
-This educational tool does not implement Alpine virtual package providers,
-architecture selection, pinning or cross-repository version resolution.
-The output is a sorted adjacency list, not an image (visualization is stage 5).
-
-## Stage 4 — installation order
-
-Stage 4 calculates a safe installation order from the dependency graph.
-Dependencies are listed before the package that requires them. The order is
-calculated deterministically; a cycle is reported because it prevents a valid
-topological installation order. If `--max-depth` cuts off the graph, the
-program warns which packages were not fully explored.
-
-Run with a local test repository:
-
-```bash
-./run_stage4.sh --package A \
-  --repository tests/diamond-repository.txt \
-  --test-mode --max-depth 10 --install-order
-```
-
-Check cycle handling:
-
-```bash
-./run_stage4.sh --package A \
-  --repository tests/cycle-repository.txt \
-  --test-mode --max-depth 10 --install-order
-```
-
-Compare with the real Alpine package manager using an Alpine repository:
-
-```bash
-./run_stage4.sh --package curl \
-  --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/ \
-  --max-depth 100 --install-order --compare-apk
-```
-
-The comparison uses `apk add --simulate`, so it does not install packages.
-It uses the local `apk` command when available or a disposable Docker Alpine
-container otherwise. Differences can occur because APK resolves package
-versions, virtual dependencies, architecture and already installed packages;
-the analyzer builds a name-based graph from one repository index.
-
-## Stage 5 — D2 visualization
-
-Stage 5 converts the graph into the D2 diagram language, prints the D2 source,
-renders an SVG image and opens it in the default image viewer. By default the
-SVG is written to a temporary file outside the repository. Use `--output` to
-save it to a chosen path, or `--no-open` to skip opening the image.
-
-Install the D2 command-line tool using the
-[official installation instructions](https://d2lang.com/tour/install/):
-
-```bash
-curl -fsSL https://d2lang.com/install.sh | sh -s --
-d2 version
-```
-
-Visualize one package:
-
-```bash
-./run_stage5.sh --package A \
-  --repository tests/test-repository.txt \
-  --test-mode --max-depth 10
-```
-
-The three-package demonstration uses packages `A`, `B` and `C` from the test
-repository and opens each generated diagram:
-
-```bash
-./scripts/demo_stage5.sh
-```
-
-To save an image instead of using a temporary file:
-
-```bash
-./run_stage5.sh --package A \
-  --repository tests/test-repository.txt \
-  --test-mode --output graph-A.svg
-```
+| `--package NAME` | Имя анализируемого пакета |
+| `--repository PATH_OR_URL` | URL репозитория Alpine или путь к тестовому файлу |
+| `--test-mode` | Использовать локальный тестовый репозиторий |
+| `--max-depth N` | Максимальная глубина анализа |
+| `--install-order` | Вывести порядок установки (этап 4) |
+| `--compare-apk` | Сравнить порядок с симуляцией Alpine APK (этап 4) |
+| `--output FILE` | Сохранить SVG в указанный файл (этап 5) |
+| `--no-open` | Не открывать SVG автоматически (этап 5) |
