@@ -16,6 +16,12 @@ DEFAULT_DEPTH = 3
 DEFAULT_APK_IMAGE = "alpine:3.20"
 NO_DEPENDENCIES = 0
 APK_INDEX_SUFFIX = "/APKINDEX.tar.gz"
+DOCKER_PLATFORMS = {
+    "x86_64": "linux/amd64",
+    "aarch64": "linux/arm64",
+    "armhf": "linux/arm/v6",
+    "armv7": "linux/arm/v7",
+}
 INSTALL_LINE = re.compile(
     r"\bInstalling\s+([A-Za-z0-9][A-Za-z0-9+_.-]*)\s+\("
 )
@@ -116,6 +122,12 @@ def repository_for_apk(repository):
     return repository.rstrip("/")
 
 
+def docker_platform(repository):
+    """Match a known Alpine repository architecture to a Docker platform."""
+    architecture = repository_for_apk(repository).rsplit("/", 1)[-1]
+    return DOCKER_PLATFORMS.get(architecture)
+
+
 def build_apk_command(package, repository, apk_image):
     """Build a safe simulation command using apk or a Docker Alpine image."""
     apk_args = [
@@ -129,13 +141,15 @@ def build_apk_command(package, repository, apk_image):
     if docker_path:
         repository = repository_for_apk(repository)
         script = (
-            "apk update && apk add --simulate --no-progress "
-            "--repository \"$1\" \"$2\""
+            "printf '%s\\n' \"$1\" > /etc/apk/repositories && "
+            "apk update && apk add --simulate --no-progress \"$2\""
         )
-        return [
-            docker_path, "run", "--rm", apk_image, "sh", "-c",
-            script, "stage4", repository, package
-        ]
+        docker_args = ["run", "--rm"]
+        platform = docker_platform(repository)
+        if platform:
+            docker_args.extend(["--platform", platform])
+        docker_args.extend([apk_image, "sh", "-c", script])
+        return [docker_path, *docker_args, "stage4", repository, package]
     raise RuntimeError(
         "APK and Docker were not found. Install apk or Docker to compare."
     )
@@ -168,6 +182,7 @@ def print_comparison(expected, output):
     if not actual:
         print("Could not extract package names from APK output.")
         return
+    print("APK installation order: " + " -> ".join(actual))
 
     expected_common = [name for name in expected if name in actual]
     actual_common = [name for name in actual if name in expected]
@@ -175,12 +190,21 @@ def print_comparison(expected, output):
         print("\nComparison: the shared packages have the same order.")
     else:
         print("\nComparison: package order differs from the analyzer.")
+        print(
+            "Possible reasons: installed packages, virtual providers, "
+            "versions, architecture or repository priority."
+        )
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))
     if missing:
         print("Not listed by APK: " + ", ".join(missing))
     if extra:
         print("Only listed by APK: " + ", ".join(extra))
+    if missing or extra:
+        print(
+            "Possible reasons: preinstalled packages, virtual providers, "
+            "versions, architecture or repository priority."
+        )
 
 
 def validate_stage_arguments(args):

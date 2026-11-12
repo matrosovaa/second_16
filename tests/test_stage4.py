@@ -4,6 +4,7 @@ import unittest
 
 from src.stage4 import (
     build_install_order,
+    docker_platform,
     parse_apk_installation_order,
     repository_for_apk,
 )
@@ -54,6 +55,10 @@ class ApkOutputTests(unittest.TestCase):
         self.assertEqual(
             repository_for_apk(url), "https://example.org/main/x86_64"
         )
+
+    def test_docker_platform(self):
+        url = "https://example.org/main/x86_64/"
+        self.assertEqual(docker_platform(url), "linux/amd64")
 
 
 if __name__ == "__main__":
