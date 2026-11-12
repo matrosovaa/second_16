@@ -1,4 +1,114 @@
-# Variant 16 — Stage 3
+# Вариант 16 — команды для защиты этапов 4 и 5
+
+## Команды для защиты: этапы 4 и 5
+
+Код этапов 1–3 не изменялся. Команды вводятся в Terminal из корневой папки проекта `second_16`.
+Для демонстрации обоих этапов удобнее оставаться на ветке `5`:
+она содержит реализацию этапа 4 и этапа 5.
+
+Перейти на итоговую ветку:
+
+```bash
+git switch 5
+```
+
+### Этап 4. Порядок загрузки зависимостей
+
+**1. Показать правильный порядок установки пакетов** на тестовом репозитории:
+
+```bash
+./run_stage4.sh --package A --repository tests/diamond-repository.txt --test-mode --max-depth 10 --install-order
+```
+
+Ожидаемый порядок: `D`, затем `B` и `C`, затем `A`.
+Пакет `D` устанавливается первым, потому что от него зависят `B` и `C`.
+
+**2. Показать обработку циклических зависимостей:**
+
+```bash
+./run_stage4.sh --package A --repository tests/cycle-repository.txt --test-mode --max-depth 10 --install-order
+```
+
+Ожидается сообщение об ошибке `Dependency cycle blocks installation order`.
+При цикле корректный порядок установки построить нельзя.
+
+**3. Сравнить результат с настоящим Alpine APK:**
+
+```bash
+./run_stage4.sh --package curl --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/ --max-depth 100 --install-order --compare-apk
+```
+
+Для сравнения нужен установленный `apk` или запущенный Docker.
+Используется режим `apk add --simulate`: пакеты не устанавливаются.
+
+### Этап 5. Визуализация графа в D2
+
+**1. Установить D2 (один раз):**
+
+```bash
+curl -fsSL https://d2lang.com/install.sh | sh -s --
+```
+
+Проверить установку:
+
+```bash
+d2 version
+```
+
+**2. Построить граф для пакета A:**
+
+```bash
+./run_stage5.sh --package A --repository tests/test-repository.txt --test-mode --max-depth 10
+```
+
+**3. Построить граф для пакета B:**
+
+```bash
+./run_stage5.sh --package B --repository tests/test-repository.txt --test-mode --max-depth 10
+```
+
+**4. Построить граф для пакета C:**
+
+```bash
+./run_stage5.sh --package C --repository tests/test-repository.txt --test-mode --max-depth 10
+```
+
+Каждая команда выводит описание графа D2, создаёт SVG-изображение
+и открывает его. Файл по умолчанию сохраняется во временную папку.
+
+**Вместо трёх отдельных команд можно запустить общую демонстрацию:**
+
+```bash
+./scripts/demo_stage5.sh
+```
+
+Скрипт последовательно строит графы для `A`, `B` и `C`.
+
+### Общая проверка проекта
+
+Запустить все автоматические тесты:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Ожидаемый результат: `Ran 34 tests` и `OK`.
+
+Показать ветки и историю коммитов:
+
+```bash
+git branch -v
+git log --oneline --decorate --all -10
+```
+
+Отправить ветки 4 и 5 на GitHub:
+
+```bash
+git push -u origin 4
+git push -u origin 5
+```
+
+---
 
 ## Overview
 
