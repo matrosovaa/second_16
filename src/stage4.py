@@ -15,6 +15,7 @@ from src.main import validate_depth, validate_package, validate_repository
 DEFAULT_DEPTH = 3
 DEFAULT_APK_IMAGE = "alpine:3.20"
 NO_DEPENDENCIES = 0
+SUCCESS_EXIT_CODE = 0
 APK_INDEX_SUFFIX = "/APKINDEX.tar.gz"
 DOCKER_PLATFORMS = {
     "x86_64": "linux/amd64",
@@ -24,6 +25,11 @@ DOCKER_PLATFORMS = {
 }
 INSTALL_LINE = re.compile(
     r"\bInstalling\s+([A-Za-z0-9][A-Za-z0-9+_.-]*)\s+\("
+)
+COMPARISON_REASONS = (
+    "Possible reasons: so:, cmd: and pc: dependencies are not followed "
+    "by the analyzer, packages already present in the Alpine image, "
+    "virtual providers, versions, architecture or repository priority."
 )
 
 
@@ -66,18 +72,36 @@ def load_source(repository, test_mode):
     return read_apkindex(repository)
 
 
-def build_install_order(graph):
-    """Return a deterministic order with every dependency before its parent."""
-    pending = {
+def count_pending(graph):
+    """Count how many dependencies of every package are still unresolved."""
+    return {
         package: sum(item in graph for item in dependencies)
         for package, dependencies in graph.items()
     }
+
+
+def map_dependents(graph):
+    """Map every package to the packages that depend on it."""
     dependents = {package: [] for package in graph}
     for package, dependencies in graph.items():
         for dependency in dependencies:
             if dependency in dependents:
                 dependents[dependency].append(package)
+    return dependents
 
+
+def release_dependents(dependency, dependents, pending, ready):
+    """Mark a dependency as installed and queue packages that became ready."""
+    for package in dependents[dependency]:
+        pending[package] -= 1
+        if pending[package] == NO_DEPENDENCIES:
+            heapq.heappush(ready, package)
+
+
+def sort_by_dependencies(graph):
+    """Run Kahn's algorithm and return the packages it managed to order."""
+    pending = count_pending(graph)
+    dependents = map_dependents(graph)
     ready = [
         package for package, count in pending.items()
         if count == NO_DEPENDENCIES
@@ -87,11 +111,13 @@ def build_install_order(graph):
     while ready:
         dependency = heapq.heappop(ready)
         order.append(dependency)
-        for package in dependents[dependency]:
-            pending[package] -= 1
-            if pending[package] == NO_DEPENDENCIES:
-                heapq.heappush(ready, package)
+        release_dependents(dependency, dependents, pending, ready)
+    return order
 
+
+def build_install_order(graph):
+    """Return a deterministic order with every dependency before its parent."""
+    order = sort_by_dependencies(graph)
     if len(order) != len(graph):
         unresolved = sorted(set(graph) - set(order))
         names = ", ".join(unresolved)
@@ -164,7 +190,7 @@ def run_apk_simulation(package, repository, apk_image):
     output = "\n".join(
         part.strip() for part in (result.stdout, result.stderr) if part.strip()
     )
-    if result.returncode != 0:
+    if result.returncode != SUCCESS_EXIT_CODE:
         raise RuntimeError(output or "APK simulation failed.")
     return output
 
@@ -174,26 +200,19 @@ def parse_apk_installation_order(output):
     return INSTALL_LINE.findall(output)
 
 
-def print_comparison(expected, output):
-    """Display APK's order and compare packages shared by both results."""
-    actual = parse_apk_installation_order(output)
-    print("\nAPK simulation output:")
-    print(output or "No output from APK.")
-    if not actual:
-        print("Could not extract package names from APK output.")
-        return
-    print("APK installation order: " + " -> ".join(actual))
-
+def compare_order(expected, actual):
+    """Compare the relative order of packages found in both results."""
     expected_common = [name for name in expected if name in actual]
     actual_common = [name for name in actual if name in expected]
     if expected_common == actual_common:
         print("\nComparison: the shared packages have the same order.")
-    else:
-        print("\nComparison: package order differs from the analyzer.")
-        print(
-            "Possible reasons: installed packages, virtual providers, "
-            "versions, architecture or repository priority."
-        )
+        return
+    print("\nComparison: package order differs from the analyzer.")
+    print(COMPARISON_REASONS)
+
+
+def compare_membership(expected, actual):
+    """Report packages that appear in only one of the two results."""
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))
     if missing:
@@ -201,10 +220,20 @@ def print_comparison(expected, output):
     if extra:
         print("Only listed by APK: " + ", ".join(extra))
     if missing or extra:
-        print(
-            "Possible reasons: preinstalled packages, virtual providers, "
-            "versions, architecture or repository priority."
-        )
+        print(COMPARISON_REASONS)
+
+
+def print_comparison(expected, output):
+    """Display APK's order and compare it with the analyzer's result."""
+    actual = parse_apk_installation_order(output)
+    print("\nAPK simulation output:")
+    print(output or "No output from APK.")
+    if not actual:
+        print("Could not extract package names from APK output.")
+        return
+    print("APK installation order: " + " -> ".join(actual))
+    compare_order(expected, actual)
+    compare_membership(expected, actual)
 
 
 def validate_stage_arguments(args):

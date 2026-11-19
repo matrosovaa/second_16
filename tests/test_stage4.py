@@ -1,9 +1,13 @@
 """Tests for dependency installation order and APK output parsing."""
 
+import io
 import unittest
+from contextlib import redirect_stdout
 
 from src.stage4 import (
     build_install_order,
+    compare_membership,
+    compare_order,
     docker_platform,
     parse_apk_installation_order,
     repository_for_apk,
@@ -59,6 +63,31 @@ class ApkOutputTests(unittest.TestCase):
     def test_docker_platform(self):
         url = "https://example.org/main/x86_64/"
         self.assertEqual(docker_platform(url), "linux/amd64")
+
+
+class ComparisonTests(unittest.TestCase):
+    """Check the report produced when comparing with APK."""
+
+    @staticmethod
+    def capture(function, *arguments):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            function(*arguments)
+        return buffer.getvalue()
+
+    def test_same_order(self):
+        report = self.capture(compare_order, ["A", "B"], ["A", "B"])
+        self.assertIn("same order", report)
+
+    def test_different_order(self):
+        report = self.capture(compare_order, ["A", "B"], ["B", "A"])
+        self.assertIn("differs", report)
+        self.assertIn("so:", report)
+
+    def test_membership(self):
+        report = self.capture(compare_membership, ["A", "B"], ["B", "musl"])
+        self.assertIn("Not listed by APK: A", report)
+        self.assertIn("Only listed by APK: musl", report)
 
 
 if __name__ == "__main__":
