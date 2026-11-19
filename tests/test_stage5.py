@@ -2,7 +2,7 @@
 
 import unittest
 
-from src.stage5 import build_d2
+from src.stage5 import build_d2, main
 
 
 class D2DiagramTests(unittest.TestCase):
@@ -24,6 +24,17 @@ class D2DiagramTests(unittest.TestCase):
     def test_missing_root(self):
         with self.assertRaisesRegex(ValueError, "not found"):
             build_d2({"A": []}, "Z")
+
+
+class CommandLineTests(unittest.TestCase):
+    """Check the argument validation of the stage-5 command."""
+
+    def test_compare_requires_real_repository(self):
+        code = main([
+            "--package", "A", "--repository", "tests/test-repository.txt",
+            "--test-mode", "--compare-apk", "--no-open",
+        ])
+        self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":

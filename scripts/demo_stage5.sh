@@ -1,11 +1,16 @@
 #!/bin/sh
 set -eu
 
-for package in A B C
+REPOSITORY="${REPOSITORY:-https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/}"
+DEPTH="${DEPTH:-3}"
+
+mkdir -p out
+for package in alpine-base build-base openssh
 do
     ./run_stage5.sh \
         --package "$package" \
-        --repository tests/test-repository.txt \
-        --test-mode \
-        --max-depth 10
+        --repository "$REPOSITORY" \
+        --max-depth "$DEPTH" \
+        --output "out/$package.svg" \
+        --compare-apk
 done

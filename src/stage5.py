@@ -10,11 +10,14 @@ import tempfile
 from pathlib import Path
 
 from src.alpine import read_apkindex
+from src.apk_dot import print_dot_comparison, run_apk_dot
 from src.graph import build_graph, read_test_repository
 from src.main import validate_depth, validate_package, validate_repository
+from src.stage4 import DEFAULT_APK_IMAGE
 
 
 DEFAULT_DEPTH = 3
+SUCCESS_EXIT_CODE = 0
 ROOT_FILL = "#e8f1ff"
 ROOT_STROKE = "#356a9a"
 
@@ -42,6 +45,14 @@ def build_parser():
     parser.add_argument(
         "--no-open", action="store_true",
         help="Create the SVG without opening the image viewer."
+    )
+    parser.add_argument(
+        "--compare-apk", action="store_true",
+        help="Compare the graph with the output of apk dot."
+    )
+    parser.add_argument(
+        "--apk-image", default=DEFAULT_APK_IMAGE,
+        help="Docker image used when the apk command is unavailable."
     )
     return parser
 
@@ -103,7 +114,7 @@ def render_d2(source, output_path=None):
         [d2_path, "--stdout-format=svg", "-", "-"],
         input=source, capture_output=True, text=True, check=False
     )
-    if result.returncode != 0:
+    if result.returncode != SUCCESS_EXIT_CODE:
         raise RuntimeError(result.stderr.strip() or "D2 rendering failed.")
 
     if output_path:
@@ -138,33 +149,49 @@ def validate_stage_arguments(args):
     validate_package(args.package)
     validate_repository(args.repository, args.test_mode)
     validate_depth(args.max_depth)
+    if args.compare_apk and args.test_mode:
+        raise ValueError("APK comparison requires a real repository URL.")
+
+
+def compare_with_apk(args, graph):
+    """Run apk dot and print how its graph differs from the analyzer's."""
+    output = run_apk_dot(args.package, args.repository, args.apk_image)
+    print_dot_comparison(graph, output)
+
+
+def show_image(diagram, args):
+    """Render the diagram to SVG and open it unless opening is disabled."""
+    image_path = render_d2(diagram, args.output)
+    print(f"SVG image: {image_path}")
+    if args.no_open:
+        return
+    try:
+        open_diagram(image_path)
+    except OSError as error:
+        print(f"Could not open the image automatically: {error}")
+
+
+def run_visualization(args):
+    """Build the graph, print its D2 text, show the image, compare with apk."""
+    validate_stage_arguments(args)
+    source = load_source(args.repository, args.test_mode)
+    graph = build_graph(source, args.package, args.max_depth)
+    diagram = build_d2(graph, args.package)
+    print(f"D2 description for {args.package}:")
+    print(diagram, end="")
+    show_image(diagram, args)
+    if args.compare_apk:
+        compare_with_apk(args, graph)
 
 
 def main(argv=None):
-    """Build a graph, print its D2 description and display the SVG image."""
+    """Run stage 5 and report any failure as a short error message."""
     args = build_parser().parse_args(argv)
     try:
-        validate_stage_arguments(args)
-        source = load_source(args.repository, args.test_mode)
-        graph = build_graph(source, args.package, args.max_depth)
-        diagram = build_d2(graph, args.package)
-    except (OSError, UnicodeError, ValueError) as error:
+        run_visualization(args)
+    except (OSError, RuntimeError, UnicodeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
-
-    print(f"D2 description for {args.package}:")
-    print(diagram, end="")
-    try:
-        image_path = render_d2(diagram, args.output)
-    except (OSError, RuntimeError) as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
-    print(f"SVG image: {image_path}")
-    if not args.no_open:
-        try:
-            open_diagram(image_path)
-        except OSError as error:
-            print(f"Could not open the image automatically: {error}")
     return 0
 
 
